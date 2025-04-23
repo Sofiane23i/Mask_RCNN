@@ -35,7 +35,7 @@ import numpy as np
 import skimage.draw
 
 # Root directory of the project
-ROOT_DIR = os.path.abspath("../../")
+ROOT_DIR = os.path.abspath(".")
 
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
@@ -66,7 +66,7 @@ class BalloonConfig(Config):
     IMAGES_PER_GPU = 2
 
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 1  # Background + balloon
+    NUM_CLASSES = 1 + 6  # Background + balloon
 
     # Number of training steps per epoch
     STEPS_PER_EPOCH = 100
@@ -87,7 +87,12 @@ class BalloonDataset(utils.Dataset):
         subset: Subset to load: train or val
         """
         # Add classes. We have only one class to add.
-        self.add_class("balloon", 1, "balloon")
+        self.add_class("balloon", 1, "broken part")
+        self.add_class("balloon", 2, "crack")
+        self.add_class("balloon", 3, "dent")
+        self.add_class("balloon", 4, "lamp broken")
+        self.add_class("balloon", 5, "missing part")
+        self.add_class("balloon", 6, "scratch")
 
         # Train or validation dataset?
         assert subset in ["train", "val"]
@@ -109,7 +114,8 @@ class BalloonDataset(utils.Dataset):
         # }
         # We mostly care about the x and y coordinates of each region
         # Note: In VIA 2.0, regions was changed from a dict to a list.
-        annotations = json.load(open(os.path.join(dataset_dir, "via_region_data.json")))
+        #annotations = json.load(open(os.path.join(dataset_dir, "via_region_data.json")))
+        annotations = json.load(open(os.path.join(dataset_dir, "vgg_annotations.json")))
         annotations = list(annotations.values())  # don't need the dict keys
 
         # The VIA tool saves images in the JSON even if they don't have any
