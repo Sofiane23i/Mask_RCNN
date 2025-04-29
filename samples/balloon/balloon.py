@@ -33,6 +33,10 @@ import json
 import datetime
 import numpy as np
 import skimage.draw
+import imgaug.augmenters as iaa
+
+
+
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath(".")
@@ -81,6 +85,55 @@ class BalloonConfig(Config):
 
 class BalloonDataset(utils.Dataset):
 
+    
+    def load_balloon(self, dataset_dir, subset):
+        """Load a subset of the multi-class balloon-style dataset."""
+        self.add_class("balloon", 1, "broken part")
+        self.add_class("balloon", 2, "crack")
+        self.add_class("balloon", 3, "dent")
+        self.add_class("balloon", 4, "lamp broken")
+        self.add_class("balloon", 5, "missing part")
+        self.add_class("balloon", 6, "scratch")
+
+        assert subset in ["train", "val"]
+        dataset_dir = os.path.join(dataset_dir, subset)
+
+        annotations = json.load(open(os.path.join(dataset_dir, "vgg_annotations.json")))
+        annotations = list(annotations.values())
+        annotations = [a for a in annotations if a['regions']]
+
+        for a in annotations:
+            regions = a['regions']
+            if isinstance(regions, dict):
+                regions = list(regions.values())
+
+            polygons = []
+            class_ids = []
+
+            for r in regions:
+                shape = r['shape_attributes']
+                label = r['region_attributes'].get('label', '').strip().lower()
+
+                # Match to class name (case insensitive)
+                for class_info in self.class_info[1:]:  # skip BG at index 0
+                    if label == class_info['name'].lower():
+                        class_ids.append(class_info['id'])
+                        polygons.append(shape)
+                        break
+
+            image_path = os.path.join(dataset_dir, a['filename'])
+            image = skimage.io.imread(image_path)
+            height, width = image.shape[:2]
+
+            self.add_image(
+                "balloon",
+                image_id=a['filename'],
+                path=image_path,
+                width=width, height=height,
+                polygons=polygons,
+                class_ids=class_ids)
+
+    '''
     def load_balloon(self, dataset_dir, subset):
         """Load a subset of the Balloon dataset.
         dataset_dir: Root directory of the dataset.
@@ -147,6 +200,7 @@ class BalloonDataset(utils.Dataset):
                 width=width, height=height,
                 polygons=polygons)
 
+    
     def load_mask(self, image_id):
         """Generate instance masks for an image.
        Returns:
@@ -172,6 +226,55 @@ class BalloonDataset(utils.Dataset):
         # Return mask, and array of class IDs of each instance. Since we have
         # one class ID only, we return an array of 1s
         return mask.astype(np.bool), np.ones([mask.shape[-1]], dtype=np.int32)
+    '''
+    def load_mask(self, image_id):
+        """Generate instance masks for an image."""
+        info = self.image_info[image_id]
+        polygons = info['polygons']
+        class_ids = info['class_ids']
+
+        mask = np.zeros((info['height'], info['width'], len(polygons)), dtype=np.uint8)
+
+        for i, p in enumerate(polygons):
+            rr, cc = skimage.draw.polygon(p['all_points_y'], p['all_points_x'])
+            mask[rr, cc, i] = 1
+
+        class_ids = np.array(class_ids, dtype=np.int32)
+        return mask, class_ids
+
+        """Generate instance masks for an image."""
+        info = self.image_info[image_id]
+        annotations = info['annotations']
+        
+        count = len(annotations)
+        if count == 0:
+            return super(self.__class__, self).load_mask(image_id)
+
+        masks = []
+        class_ids = []
+
+        for ann in annotations:
+            class_name = ann['category_name']  # or ann['label'] depending on your format
+            if class_name not in self.class_map:
+                continue  # skip unknown classes
+            class_id = self.class_map[class_name]
+
+            # Create binary mask
+            mask = np.zeros((info['height'], info['width']), dtype=np.uint8)
+            # Assuming polygon data is available
+            rr, cc = skimage.draw.polygon(ann['all_points_y'], ann['all_points_x'])
+            mask[rr, cc] = 1
+
+            masks.append(mask)
+            class_ids.append(class_id)
+
+        if masks:
+            mask = np.stack(masks, axis=-1)
+            class_ids = np.array(class_ids, dtype=np.int32)
+            return mask, class_ids
+        else:
+            return super(self.__class__, self).load_mask(image_id)
+   
 
     def image_reference(self, image_id):
         """Return the path of the image."""
@@ -181,6 +284,13 @@ class BalloonDataset(utils.Dataset):
         else:
             super(self.__class__, self).image_reference(image_id)
 
+augmentation = iaa.Sequential([
+    iaa.Fliplr(0.5),  # horizontally flip 50% of images
+    iaa.Flipud(0.2),  # vertically flip 20% of images
+    iaa.Affine(rotate=(-10, 10)),  # rotate images
+    iaa.Multiply((0.8, 1.2)),  # change brightness
+    iaa.GaussianBlur(sigma=(0.0, 1.0))  # blur images
+])
 
 def train(model):
     """Train the model."""
@@ -194,6 +304,14 @@ def train(model):
     dataset_val.load_balloon(args.dataset, "val")
     dataset_val.prepare()
 
+    # Show counts
+    total_images = len(dataset_train.image_ids) + len(dataset_val.image_ids)
+    train_percentage = (len(dataset_train.image_ids) / total_images) * 100
+    val_percentage = (len(dataset_val.image_ids) / total_images) * 100
+
+    print(f"Training images: {len(dataset_train.image_ids)} ({train_percentage:.2f}%)")
+    print(f"Validation images: {len(dataset_val.image_ids)} ({val_percentage:.2f}%)")
+
     # *** This training schedule is an example. Update to your needs ***
     # Since we're using a very small dataset, and starting from
     # COCO trained weights, we don't need to train too long. Also,
@@ -202,7 +320,8 @@ def train(model):
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=30,
-                layers='heads')
+                layers='heads')#,
+                #augmentation=augmentation)
 
 
 def color_splash(image, mask):
