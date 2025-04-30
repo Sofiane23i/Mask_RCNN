@@ -35,6 +35,15 @@ import numpy as np
 import skimage.draw
 import imgaug.augmenters as iaa
 
+import tensorflow as tf
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    except RuntimeError as e:
+        print(e)
 
 
 
@@ -70,7 +79,7 @@ class BalloonConfig(Config):
     IMAGES_PER_GPU = 2
 
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 6  # Background + balloon
+    NUM_CLASSES = 1 + 8  # Background + balloon
 
     # Number of training steps per epoch
     STEPS_PER_EPOCH = 100
@@ -94,6 +103,9 @@ class BalloonDataset(utils.Dataset):
         self.add_class("balloon", 4, "lamp broken")
         self.add_class("balloon", 5, "missing part")
         self.add_class("balloon", 6, "scratch")
+        self.add_class("balloon", 7, "tire flat")
+        self.add_class("balloon", 8, "glass shatter")
+
 
         assert subset in ["train", "val"]
         dataset_dir = os.path.join(dataset_dir, subset)
@@ -320,7 +332,7 @@ def train(model):
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=30,
-                layers='heads')#,
+                layers='all')#,
                 #augmentation=augmentation)
 
 
