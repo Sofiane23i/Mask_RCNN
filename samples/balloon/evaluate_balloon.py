@@ -40,17 +40,17 @@ def compute_metrics(dataset, model, config, iou_threshold=0.5):
 
 def evaluate(model, dataset_dir, config):
     # Load train and val sets
-    #dataset_train = BalloonDataset()
-    #dataset_train.load_balloon(dataset_dir, "train")
-    #dataset_train.prepare()
+    dataset_train = BalloonDataset()
+    dataset_train.load_balloon(dataset_dir, "train")
+    dataset_train.prepare()
 
     dataset_val = BalloonDataset()
     dataset_val.load_balloon(dataset_dir, "val")
     dataset_val.prepare()
 
-    #print("\nEvaluating on TRAIN set...")
-    #mAP_train, precision_train, recall_train = compute_metrics(dataset_train, model, config)
-    #print(f"TRAIN Results:\nmAP: {mAP_train:.4f}, Precision: {precision_train:.4f}, Recall: {recall_train:.4f}")
+    print("\nEvaluating on TRAIN set...")
+    mAP_train, precision_train, recall_train = compute_metrics(dataset_train, model, config)
+    print(f"TRAIN Results:\nmAP: {mAP_train:.4f}, Precision: {precision_train:.4f}, Recall: {recall_train:.4f}")
 
     print("\nEvaluating on VAL set...")
     mAP_val, precision_val, recall_val = compute_metrics(dataset_val, model, config)

@@ -79,7 +79,7 @@ class BalloonConfig(Config):
     IMAGES_PER_GPU = 2
 
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 8  # Background + balloon
+    NUM_CLASSES = 1 + 6 #8  # Background + balloon
 
     # Number of training steps per epoch
     STEPS_PER_EPOCH = 100
@@ -103,8 +103,8 @@ class BalloonDataset(utils.Dataset):
         self.add_class("balloon", 4, "lamp broken")
         self.add_class("balloon", 5, "missing part")
         self.add_class("balloon", 6, "scratch")
-        self.add_class("balloon", 7, "tire flat")
-        self.add_class("balloon", 8, "glass shatter")
+        #self.add_class("balloon", 7, "tire flat")
+        #self.add_class("balloon", 8, "glass shatter")
 
 
         assert subset in ["train", "val"]
@@ -331,7 +331,7 @@ def train(model):
     print("Training network heads")
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=30,
+                epochs=120, #30,
                 layers='all')#,
                 #augmentation=augmentation)
 
