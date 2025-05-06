@@ -56,7 +56,7 @@ from mrcnn.config import Config
 from mrcnn import model as modellib, utils
 
 # Path to trained weights file
-COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_balloon_0200.h5")
 
 # Directory to save logs and model checkpoints, if not provided
 # through the command line argument --logs
@@ -296,13 +296,13 @@ class BalloonDataset(utils.Dataset):
         else:
             super(self.__class__, self).image_reference(image_id)
 
-augmentation = iaa.Sequential([
-    iaa.Fliplr(0.5),  # horizontally flip 50% of images
-    iaa.Flipud(0.2),  # vertically flip 20% of images
-    iaa.Affine(rotate=(-10, 10)),  # rotate images
-    iaa.Multiply((0.8, 1.2)),  # change brightness
-    iaa.GaussianBlur(sigma=(0.0, 1.0))  # blur images
-])
+#augmentation = iaa.Sequential([
+#    iaa.Crop(percent=(0, 0.1)),
+#    iaa.Affine(scale=(0.9, 1.1), translate_percent=(-0.1, 0.1)),
+#    iaa.LinearContrast((0.8, 1.2)),
+#    iaa.AdditiveGaussianNoise(scale=(0, 0.03*255)),
+#])
+
 
 def train(model):
     """Train the model."""
@@ -331,8 +331,8 @@ def train(model):
     print("Training network heads")
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=120, #30,
-                layers='all')#,
+                epochs=200, #30,
+                layers='all') #,
                 #augmentation=augmentation)
 
 

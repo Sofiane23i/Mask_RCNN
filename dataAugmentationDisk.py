@@ -4,9 +4,9 @@ import cv2
 import albumentations as A
 
 # Paths
-INPUT_DIR = './datasets/NewDatasetAug/newVal/'
-ANNOTATIONS_FILE = './datasets/NewDatasetAug/newVal/vgg_annotations.json'
-OUTPUT_DIR = './datasets/NewDatasetAug/newVal/newVal2/'
+INPUT_DIR = './datasets/coco/train/'
+ANNOTATIONS_FILE = './datasets/coco/train/vgg_annotations.json'
+OUTPUT_DIR = './datasets/coco/train/newtrain/'
 OUTPUT_ANNOTATIONS_FILE = 'vgg_annotations.json'
 NUM_AUGMENTATIONS = 5
 
@@ -21,9 +21,10 @@ augmented_annotations = {}
 transform = A.Compose([
     A.HorizontalFlip(p=0.5),
     A.RandomBrightnessContrast(p=0.5),
-    A.Rotate(limit=45, p=0.7),
-    A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=20, p=0.5),
-], keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))  # keep all keypoints
+    A.Rotate(limit=30, border_mode=cv2.BORDER_CONSTANT, value=(0, 0, 0), p=0.7),
+    A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=15,
+                       border_mode=cv2.BORDER_CONSTANT, value=(0, 0, 0), p=0.5),
+], keypoint_params=A.KeypointParams(format='xy', remove_invisible=False))
 
 # Loop through all images
 for img_key, img_data in annotations.items():

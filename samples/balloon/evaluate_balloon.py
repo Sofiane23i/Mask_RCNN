@@ -15,14 +15,16 @@ from balloon import BalloonConfig, BalloonDataset  # assuming balloon.py has you
 
 def compute_metrics(dataset, model, config, iou_threshold=0.5):
     APs, precisions, recalls = [], [], []
-    for image_id in dataset.image_ids:
+    total_images = len(dataset.image_ids)
+
+    for idx, image_id in enumerate(dataset.image_ids, 1):
         image, image_meta, gt_class_id, gt_bbox, gt_mask =\
             modellib.load_image_gt(dataset, config, image_id, use_mini_mask=False)
-        
+
         molded_images = np.expand_dims(modellib.mold_image(image.astype(np.float32), config), 0)
         results = model.detect([image], verbose=0)
         r = results[0]
-        
+
         AP, precisions_, recalls_, _ =\
             utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
                              r["rois"], r["class_ids"], r["scores"], r['masks'],
@@ -31,7 +33,11 @@ def compute_metrics(dataset, model, config, iou_threshold=0.5):
         if precisions_.size:
             precisions.append(np.mean(precisions_))
             recalls.append(np.mean(recalls_))
-    
+
+        # Print progress every 100 images
+        if idx % 100 == 0 or idx == total_images:
+            print(f"Processed {idx}/{total_images} images...")
+
     mAP = np.mean(APs) if APs else 0
     mean_precision = np.mean(precisions) if precisions else 0
     mean_recall = np.mean(recalls) if recalls else 0
