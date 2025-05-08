@@ -2,7 +2,7 @@ import os
 import json
 
 # Paths
-ANNOTATIONS_FILE = './datasets/coco/vgg_annotations_all.json'  # The original full annotation file
+ANNOTATIONS_FILE = './datasets/coco/vgg_annotations.json'  # The original full annotation file
 TRAIN_DIR = './datasets/coco/train/'  # Folder with training images
 VAL_DIR = './datasets/coco/val/'      # Folder with validation images
 OUTPUT_TRAIN_ANNOTATIONS = './datasets/coco/train/vgg_annotations.json'

@@ -2,7 +2,7 @@ import json
 import os
 
 # Chemin vers ton fichier d’annotation VGG
-vgg_path = './datasets/coco/vgg_annotations_all.json'
+vgg_path = './val2/vgg_annotations.json'
 
 # Charger le fichier JSON
 with open(vgg_path, 'r') as f:
