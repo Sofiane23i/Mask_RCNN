@@ -3,6 +3,7 @@ import json
 import cv2
 import numpy as np
 from tqdm import tqdm
+from shapely.geometry import Polygon, box
 
 # Config
 ZOOM_SIZE = 192  # was 256
@@ -37,18 +38,14 @@ for filename, data in tqdm(annotations.items()):
 
     for y in range(0, H, STEP):
         for x in range(0, W, STEP):
-            # Coordinates of the zoom window (before padding)
             x1, y1 = x - ZOOM_SIZE // 2, y - ZOOM_SIZE // 2
             x2, y2 = x1 + ZOOM_SIZE, y1 + ZOOM_SIZE
 
-            # Create padded canvas
             zoom_canvas = np.zeros((ZOOM_SIZE, ZOOM_SIZE, 3), dtype=np.uint8)
 
-            # Valid coordinates inside image
             x1_valid, y1_valid = max(0, x1), max(0, y1)
             x2_valid, y2_valid = min(W, x2), min(H, y2)
 
-            # Paste region from original image to canvas
             paste_x1 = x1_valid - x1
             paste_y1 = y1_valid - y1
             paste_x2 = paste_x1 + (x2_valid - x1_valid)
@@ -56,10 +53,8 @@ for filename, data in tqdm(annotations.items()):
 
             zoom_canvas[paste_y1:paste_y2, paste_x1:paste_x2] = image[y1_valid:y2_valid, x1_valid:x2_valid]
 
-            # Resize zoom canvas to full image size
             zoom_resized = cv2.resize(zoom_canvas, (W, H), interpolation=cv2.INTER_LINEAR)
 
-            # Adapt annotations
             zoom_regions = []
             for region in regions:
                 shape = region.get('shape_attributes', {})
@@ -72,24 +67,37 @@ for filename, data in tqdm(annotations.items()):
                 if region_x.size == 0 or region_y.size == 0:
                     continue
 
-                # Check if polygon is fully inside zoom window
-                if (region_x >= x1_valid).all() and (region_x <= x2_valid).all() and \
-                   (region_y >= y1_valid).all() and (region_y <= y2_valid).all():
+                polygon = Polygon(zip(region_x, region_y))
+                crop_box = box(x1_valid, y1_valid, x2_valid, y2_valid)
+                intersection = polygon.intersection(crop_box)
 
-                    # Shift to zoom window coordinates then scale to full size
-                    new_x = ((region_x - x1) / ZOOM_SIZE * W).clip(0, W).astype(int).tolist()
-                    new_y = ((region_y - y1) / ZOOM_SIZE * H).clip(0, H).astype(int).tolist()
+                if intersection.is_empty or not intersection.is_valid:
+                    continue
 
-                    new_shape = {
-                        "name": "polygon",
-                        "all_points_x": new_x,
-                        "all_points_y": new_y
-                    }
+                if not isinstance(intersection, Polygon):
+                    continue  # Skip MultiPolygon or others for simplicity
 
-                    zoom_regions.append({
-                        "shape_attributes": new_shape,
-                        "region_attributes": region.get('region_attributes', {})
-                    })
+                new_x, new_y = zip(*[
+                    ((pt[0] - x1) / ZOOM_SIZE * W, (pt[1] - y1) / ZOOM_SIZE * H)
+                    for pt in list(intersection.exterior.coords)
+                ])
+
+                new_x = np.clip(np.array(new_x).astype(int), 0, W).tolist()
+                new_y = np.clip(np.array(new_y).astype(int), 0, H).tolist()
+
+                if len(new_x) < 3 or len(new_y) < 3:
+                    continue
+
+                new_shape = {
+                    "name": "polygon",
+                    "all_points_x": new_x,
+                    "all_points_y": new_y
+                }
+
+                zoom_regions.append({
+                    "shape_attributes": new_shape,
+                    "region_attributes": region.get('region_attributes', {})
+                })
 
             if zoom_regions:
                 zoom_filename = f'zoom_{zoom_count}.jpg'
