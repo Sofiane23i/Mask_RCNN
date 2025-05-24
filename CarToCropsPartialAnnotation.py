@@ -6,12 +6,12 @@ from tqdm import tqdm
 from shapely.geometry import Polygon, box
 
 # Config
-ZOOM_SIZE = 192  # was 256
-STEP = 120       # was 128
-INPUT_IMAGE_DIR = 'datasets/coco/train_cleaned/'
-INPUT_JSON = 'datasets/coco/train_cleaned/vgg_annotations_cleaned.json'
-OUTPUT_IMAGE_DIR = 'datasets/coco/train/'
-OUTPUT_JSON = 'datasets/coco/train/vgg_annotations.json'
+ZOOM_SIZE = 192
+STEP = 120
+INPUT_IMAGE_DIR = 'datasets/coco/val_cleaned/'
+INPUT_JSON = 'datasets/coco/val_cleaned/vgg_annotations_cleaned.json'
+OUTPUT_IMAGE_DIR = 'datasets/coco/val/'
+OUTPUT_JSON = 'datasets/coco/val/vgg_annotations.json'
 
 os.makedirs(OUTPUT_IMAGE_DIR, exist_ok=True)
 
@@ -25,7 +25,7 @@ zoom_count = 0
 for filename, data in tqdm(annotations.items()):
     regions = data.get('regions', [])
     if not regions:
-        continue  # skip images with no annotations
+        continue
 
     image_path = os.path.join(INPUT_IMAGE_DIR, filename)
     image = cv2.imread(image_path)
@@ -68,14 +68,24 @@ for filename, data in tqdm(annotations.items()):
                     continue
 
                 polygon = Polygon(zip(region_x, region_y))
+                if not polygon.is_valid or polygon.area == 0:
+                    continue
+
                 crop_box = box(x1_valid, y1_valid, x2_valid, y2_valid)
                 intersection = polygon.intersection(crop_box)
 
                 if intersection.is_empty or not intersection.is_valid:
                     continue
 
-                if not isinstance(intersection, Polygon):
-                    continue  # Skip MultiPolygon or others for simplicity
+                # Handle MultiPolygon by using the largest one
+                if intersection.geom_type == "MultiPolygon":
+                    intersection = max(intersection.geoms, key=lambda p: p.area)
+                elif intersection.geom_type != "Polygon":
+                    continue
+
+                # Keep only if 80% or more of original area is preserved
+                if intersection.area / polygon.area < 0.8:
+                    continue
 
                 new_x, new_y = zip(*[
                     ((pt[0] - x1) / ZOOM_SIZE * W, (pt[1] - y1) / ZOOM_SIZE * H)

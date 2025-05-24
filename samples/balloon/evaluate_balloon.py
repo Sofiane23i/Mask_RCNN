@@ -13,54 +13,88 @@ from mrcnn.config import Config
 from mrcnn import model as modellib, utils
 from balloon import BalloonConfig, BalloonDataset  # assuming balloon.py has your dataset & config
 
+from collections import defaultdict
+from mrcnn import visualize
+
 def compute_metrics(dataset, model, config, iou_threshold=0.5):
-    APs, precisions, recalls = [], [], []
+    class_stats = defaultdict(lambda: {'APs': [], 'precisions': [], 'recalls': [], 'count': 0})
     total_images = len(dataset.image_ids)
 
     for idx, image_id in enumerate(dataset.image_ids, 1):
-        image, image_meta, gt_class_id, gt_bbox, gt_mask =\
+        image, image_meta, gt_class_id, gt_bbox, gt_mask = \
             modellib.load_image_gt(dataset, config, image_id, use_mini_mask=False)
 
         molded_images = np.expand_dims(modellib.mold_image(image.astype(np.float32), config), 0)
         results = model.detect([image], verbose=0)
         r = results[0]
 
-        AP, precisions_, recalls_, _ =\
+        AP, precisions_, recalls_, overlaps = \
             utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
                              r["rois"], r["class_ids"], r["scores"], r['masks'],
                              iou_threshold=iou_threshold)
-        APs.append(AP)
-        if precisions_.size:
-            precisions.append(np.mean(precisions_))
-            recalls.append(np.mean(recalls_))
 
-        # Print progress every 100 images
+        for class_id in np.unique(gt_class_id):
+            class_name = dataset.class_names[class_id]
+            mask = gt_class_id == class_id
+            class_stats[class_name]['count'] += np.sum(mask)
+            if AP is not None:
+                class_stats[class_name]['APs'].append(AP)
+            if precisions_.size:
+                class_stats[class_name]['precisions'].append(np.mean(precisions_))
+                class_stats[class_name]['recalls'].append(np.mean(recalls_))
+
         if idx % 100 == 0 or idx == total_images:
             print(f"Processed {idx}/{total_images} images...")
 
-    mAP = np.mean(APs) if APs else 0
-    mean_precision = np.mean(precisions) if precisions else 0
-    mean_recall = np.mean(recalls) if recalls else 0
-    return mAP, mean_precision, mean_recall
+    # Compute aggregate metrics
+    overall_APs = []
+    overall_precisions = []
+    overall_recalls = []
+
+    print("\nPer-Class Performance:")
+    for class_name, stats in class_stats.items():
+        if stats['APs']:
+            ap = np.mean(stats['APs'])
+            pr = np.mean(stats['precisions']) if stats['precisions'] else 0
+            rc = np.mean(stats['recalls']) if stats['recalls'] else 0
+        else:
+            ap = pr = rc = 0
+        print(f"  {class_name}: Count={stats['count']} | AP={ap:.4f}, Precision={pr:.4f}, Recall={rc:.4f}")
+        overall_APs.extend(stats['APs'])
+        overall_precisions.extend(stats['precisions'])
+        overall_recalls.extend(stats['recalls'])
+
+    mAP = np.mean(overall_APs) if overall_APs else 0
+    mean_precision = np.mean(overall_precisions) if overall_precisions else 0
+    mean_recall = np.mean(overall_recalls) if overall_recalls else 0
+
+    return mAP, mean_precision, mean_recall, class_stats
 
 
 def evaluate(model, dataset_dir, config):
-    # Load train and val sets
-    dataset_train = BalloonDataset()
-    dataset_train.load_balloon(dataset_dir, "train")
-    dataset_train.prepare()
+    for split in ['train', 'val']:
+        print(f"\nEvaluating on {split.upper()} set...")
+        dataset = BalloonDataset()
+        dataset.load_balloon(dataset_dir, split)
+        dataset.prepare()
 
-    dataset_val = BalloonDataset()
-    dataset_val.load_balloon(dataset_dir, "val")
-    dataset_val.prepare()
+        class_counts = defaultdict(int)
+        for image_id in dataset.image_ids:
+            _, _, gt_class_id, _, _ = modellib.load_image_gt(dataset, config, image_id, use_mini_mask=False)
+            for cid in gt_class_id:
+                class_counts[dataset.class_names[cid]] += 1
 
-    print("\nEvaluating on TRAIN set...")
-    mAP_train, precision_train, recall_train = compute_metrics(dataset_train, model, config)
-    print(f"TRAIN Results:\nmAP: {mAP_train:.4f}, Precision: {precision_train:.4f}, Recall: {recall_train:.4f}")
+        print(f"\n{split.upper()} SET CLASS COUNTS:")
+        print(f"Total images: {len(dataset.image_ids)}")
+        for class_name, count in class_counts.items():
+            print(f"  {class_name}: {count} instances")
 
-    print("\nEvaluating on VAL set...")
-    mAP_val, precision_val, recall_val = compute_metrics(dataset_val, model, config)
-    print(f"VAL Results:\nmAP: {mAP_val:.4f}, Precision: {precision_val:.4f}, Recall: {recall_val:.4f}")
+        mAP, precision, recall, _ = compute_metrics(dataset, model, config)
+        print(f"\n{split.upper()} Results:")
+        print(f"Overall mAP: {mAP:.4f}")
+        print(f"Overall Precision: {precision:.4f}")
+        print(f"Overall Recall: {recall:.4f}")
+
 
 class InferenceConfig(BalloonConfig):
     GPU_COUNT = 1

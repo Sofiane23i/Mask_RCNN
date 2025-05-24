@@ -76,7 +76,7 @@ class BalloonConfig(Config):
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 1 #2
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 6 #8  # Background + balloon
@@ -97,6 +97,7 @@ class BalloonDataset(utils.Dataset):
     
     def load_balloon(self, dataset_dir, subset):
         """Load a subset of the multi-class balloon-style dataset."""
+        #self.add_class("balloon", 1, "incident")
         self.add_class("balloon", 1, "broken part")
         self.add_class("balloon", 2, "crack")
         self.add_class("balloon", 3, "dent")
@@ -253,39 +254,6 @@ class BalloonDataset(utils.Dataset):
 
         class_ids = np.array(class_ids, dtype=np.int32)
         return mask, class_ids
-
-        """Generate instance masks for an image."""
-        info = self.image_info[image_id]
-        annotations = info['annotations']
-        
-        count = len(annotations)
-        if count == 0:
-            return super(self.__class__, self).load_mask(image_id)
-
-        masks = []
-        class_ids = []
-
-        for ann in annotations:
-            class_name = ann['category_name']  # or ann['label'] depending on your format
-            if class_name not in self.class_map:
-                continue  # skip unknown classes
-            class_id = self.class_map[class_name]
-
-            # Create binary mask
-            mask = np.zeros((info['height'], info['width']), dtype=np.uint8)
-            # Assuming polygon data is available
-            rr, cc = skimage.draw.polygon(ann['all_points_y'], ann['all_points_x'])
-            mask[rr, cc] = 1
-
-            masks.append(mask)
-            class_ids.append(class_id)
-
-        if masks:
-            mask = np.stack(masks, axis=-1)
-            class_ids = np.array(class_ids, dtype=np.int32)
-            return mask, class_ids
-        else:
-            return super(self.__class__, self).load_mask(image_id)
    
 
     def image_reference(self, image_id):
